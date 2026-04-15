@@ -103,12 +103,13 @@ def handle_deactivate(post_id, response_url):
     print(f"[deactivate] POST {post_id} \u2014 confirmaci\u00f3n enviada")
 
 
-def handle_indicate_ldap(post_id, trigger_id):
+def handle_indicate_ldap(post_id, trigger_id, action_id="indicate_ldap_a1"):
+    callback_id = "ldap_input_" + action_id.split("_")[-1]
     slack_api("views.open", {
         "trigger_id": trigger_id,
         "view": {
             "type": "modal",
-            "callback_id": "ldap_input_a1",
+            "callback_id": callback_id,
             "private_metadata": str(post_id),
             "title": {"type": "plain_text", "text": "Indicar LDAP"},
             "submit": {"type": "plain_text", "text": "Confirmar"},
@@ -130,7 +131,7 @@ def handle_indicate_ldap(post_id, trigger_id):
     print(f"[indicate_ldap] Modal abierto para POST {post_id}")
 
 
-def handle_ldap_submission(post_id, ldap, slack_user_id):
+def handle_ldap_submission(post_id, ldap, slack_user_id, clear_field="VALIDITY_ALERT1_DATE"):
     bq = get_bq_client()
     bq.query(f"""
         UPDATE {POSTS_TABLE}
@@ -139,7 +140,12 @@ def handle_ldap_submission(post_id, ldap, slack_user_id):
             SELECT EMAIL FROM {LK_PEOPLE}
             WHERE USERNAME = '{ldap}' LIMIT 1
           ),
-          VALIDITY_ALERT1_DATE = NULL,
+          MANAGER_DELEGATION_BY = (
+            SELECT EMAIL FROM {LK_PEOPLE}
+            WHERE USERNAME = '{ldap}' LIMIT 1
+          ),
+          MANAGER_DELEGATION_DATE = CURRENT_DATE(),
+          {clear_field} = NULL,
           VALIDITY_VALIDATION_DATE = NULL
         WHERE POST_ID = {post_id}
     """).result()
@@ -172,16 +178,25 @@ def process_payload(payload_str):
                 handle_keep_active(post_id, slack_user_id, response_url)
             elif action_id == "deactivate_a1":
                 handle_deactivate(post_id, response_url)
-            elif action_id == "indicate_ldap_a1":
-                handle_indicate_ldap(post_id, trigger_id)
+            elif action_id in ("indicate_ldap_a1", "indicate_ldap_a2",
+                               "indicate_ldap_a3", "indicate_ldap_a4"):
+                handle_indicate_ldap(post_id, trigger_id, action_id)
 
         elif interaction_type == "view_submission":
             view = payload.get("view", {})
-            if view.get("callback_id") == "ldap_input_a1":
+            cb = view.get("callback_id", "")
+            if cb.startswith("ldap_input_a"):
                 post_id = int(view.get("private_metadata", "0"))
                 ldap = view["state"]["values"]["ldap_block"]["ldap_input"]["value"]
                 slack_user_id = payload["user"]["id"]
-                handle_ldap_submission(post_id, ldap, slack_user_id)
+                field_map = {
+                    "ldap_input_a1": "VALIDITY_ALERT1_DATE",
+                    "ldap_input_a2": "LANG_ALERT1_DATE",
+                    "ldap_input_a3": "GROUPS_ALERT1_DATE",
+                    "ldap_input_a4": "DATECHECK_ALERT1_DATE",
+                }
+                clear_field = field_map.get(cb, "VALIDITY_ALERT1_DATE")
+                handle_ldap_submission(post_id, ldap, slack_user_id, clear_field)
 
     except Exception as e:
         import traceback
