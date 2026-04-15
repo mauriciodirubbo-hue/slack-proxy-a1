@@ -41,7 +41,6 @@ def get_bq_client():
         client_id=d["client_id"],
         client_secret=d["client_secret"],
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=["https://www.googleapis.com/auth/bigquery"],
     )
     creds.refresh(Request())
     print("[bq] credenciales refrescadas OK")
