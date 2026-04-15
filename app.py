@@ -22,8 +22,10 @@ def forward_to_verdi(body, content_type):
         print(f"[proxy] Error forwarding: {e}")
 
 
-@app.route("/webhook/a1-handler", methods=["POST"])
+@app.route("/webhook/a1-handler", methods=["GET", "POST"])
 def handler():
+    if request.method == "GET":
+        return Response("", status=200)
     body = request.get_data()
     content_type = request.content_type or "application/x-www-form-urlencoded"
     t = threading.Thread(target=forward_to_verdi, args=(body, content_type))
