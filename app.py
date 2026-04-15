@@ -24,6 +24,7 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 
 
 def get_bq_client():
+    print("[bq] iniciando get_bq_client")
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
     from google.cloud import bigquery
@@ -32,6 +33,7 @@ def get_bq_client():
     if not raw:
         raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS_JSON no configurado")
 
+    print("[bq] credenciales encontradas, largo=" + str(len(raw)))
     d = json.loads(raw)
     creds = Credentials(
         token=None,
@@ -42,6 +44,7 @@ def get_bq_client():
         scopes=["https://www.googleapis.com/auth/bigquery"],
     )
     creds.refresh(Request())
+    print("[bq] credenciales refrescadas OK")
     return bigquery.Client(project="meli-bi-data", credentials=creds)
 
 
@@ -152,8 +155,10 @@ def handle_ldap_submission(post_id, ldap, slack_user_id):
 
 def process_payload(payload_str):
     try:
+        print(f"[process] payload recibido, largo={len(payload_str)}")
         payload = json.loads(payload_str)
         interaction_type = payload.get("type")
+        print(f"[process] interaction_type={interaction_type}")
 
         if interaction_type == "block_actions":
             action = payload["actions"][0]
@@ -162,6 +167,7 @@ def process_payload(payload_str):
             slack_user_id = payload["user"]["id"]
             response_url = payload.get("response_url", "")
             trigger_id = payload.get("trigger_id", "")
+            print(f"[process] action_id={action_id} post_id={post_id}")
 
             if action_id == "keep_active_a1":
                 handle_keep_active(post_id, slack_user_id, response_url)
@@ -179,7 +185,9 @@ def process_payload(payload_str):
                 handle_ldap_submission(post_id, ldap, slack_user_id)
 
     except Exception as e:
+        import traceback
         print(f"[error] process_payload: {e}")
+        print(traceback.format_exc())
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
